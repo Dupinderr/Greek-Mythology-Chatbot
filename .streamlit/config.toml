@@ -1,0 +1,9 @@
+[server]
+# transformers lazily imports vision modules that need torchvision; Streamlit's
+# watcher walks them all on every reload and floods the log. Not needed in a
+# deployed app anyway.
+fileWatcherType = "none"
+headless = true
+
+[theme]
+base = "dark"

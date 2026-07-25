@@ -1,0 +1,22 @@
+# Secrets — never commit
+.env
+.env.*
+
+# Virtualenv and caches
+venv/
+.hf_cache/
+__pycache__/
+*.pyc
+
+# Rebuilt on first run from sources/, so not worth committing (~32MB)
+chroma_db/
+
+# HuggingFace rejects non-LFS binaries, so the background ships as the
+# .b64 text file beside it. Keep the original local only.
+assets/*.jpg
+assets/*.png
+
+# The research PDF from the project's earlier life
+attention.pdf
+
+.DS_Store
