@@ -4,9 +4,6 @@ A question-answering agent over five public-domain Greek mythology texts. It ans
 only from those texts, names the source it used, and says so when the answer isn't
 there.
 
-Three front-ends over one shared core: a terminal REPL, a FastAPI service, and a
-Streamlit chat UI.
-
 ```
 Streamlit UI  ─┐
                ├─→  rag_core  ─→  LangGraph agent ⇄ Chroma
@@ -14,15 +11,18 @@ Terminal REPL ─┤                        │
 FastAPI       ─┘                     Groq LLM
 ```
 
+Three front-ends over one shared core, so retrieval behaviour is identical in all of
+them.
+
 ## Agent, not pipeline
 
-Classic RAG embeds and retrieves on every query, whether or not it helps. Here
-retrieval is a **tool the model chooses to call**, which buys three things:
+Classic RAG retrieves on every query whether or not it helps. Here retrieval is a
+**tool the model chooses to call**:
 
-- **It can skip retrieval.** "What can you do?" doesn't need a search of Homer.
-- **It writes its own query.** Asked *"how did the hero get home?"*, it searches
-  `Odysseus return Ithaca` — the query is a model output, not the raw input.
-- **It can search again.** The graph loops, so multi-hop questions work.
+- **It can skip retrieval** — "what can you do?" needs no search of Homer.
+- **It writes its own query** — asked *"how did the hero get home?"*, it searches
+  `Odysseus return Ithaca`. The query is a model output, not the raw input.
+- **It can search again** — the graph loops, so multi-hop questions work.
 
 ```
 START → llm ──(no tool call)──→ END
@@ -35,11 +35,11 @@ START → llm ──(no tool call)──→ END
 `should_continue` checks the last message for `tool_calls`: present → retrieve, absent
 → that's the final answer.
 
-## Two implementation notes
+## Two design notes
 
-**Source filtering happens inside the search.** Users can scope to one text. Filtering
-*after* retrieval silently returns fewer than `k` chunks, so the filter is passed into
-the vector search instead and Chroma applies it during similarity search:
+**Filtering happens inside the search.** Questions can be scoped to one text. Filtering
+*after* retrieval silently returns fewer than `k` chunks, so the filter goes into the
+vector search and Chroma applies it during similarity search:
 
 ```python
 search_kwargs = {"k": 5}
@@ -47,27 +47,26 @@ if source:
     search_kwargs["filter"] = {"source": source}
 ```
 
-**Scope is per-request, not global.** An earlier version held the selected source in a
-module-level global — fine for one terminal user, broken for two concurrent web users.
-The retriever tool is now built per request via a closure, so one user's selection can't
-affect another's. Compiling a graph is cheap; the model and embeddings are already
-loaded.
+**Scope is per-request.** An earlier version held the selected source in a module-level
+global — fine for one terminal user, wrong for two concurrent web users. The retriever
+tool is now built per request via a closure, so one user's selection can't affect
+another's.
 
 ## Stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| LLM | Groq `openai/gpt-oss-20b` | Free tier, fast, supports tool calling — which the design requires |
-| Embeddings | `all-MiniLM-L6-v2`, local | Free and offline; embeddings run over every chunk, so a hosted API is where cost accumulates |
-| Vector store | Chroma, on disk | Persists between runs, supports metadata filtering |
-| Orchestration | LangGraph | Explicit state machine rather than nested `if`/`while` |
-| API | FastAPI | Typed request/response, automatic OpenAPI docs |
-| UI | Streamlit | Chat interface, no frontend build |
+| Layer | Choice |
+|---|---|
+| LLM | Groq `openai/gpt-oss-20b` — free tier, supports tool calling |
+| Embeddings | `all-MiniLM-L6-v2`, run locally — free and offline |
+| Vector store | Chroma on disk — persists, and filters on metadata |
+| Orchestration | LangGraph — explicit state machine |
+| API | FastAPI |
+| UI | Streamlit |
 
 **Corpus:** 3,947 chunks from The Odyssey (Homer), Hesiod & the Homeric Hymns,
 Bulfinch's *The Age of Fable*, Kingsley's *The Heroes*, and Hawthorne's *Tanglewood
-Tales* — all public domain, via Project Gutenberg. Chunked at 1000 characters with 200
-of overlap, retrieving the top 5.
+Tales* — public domain, via Project Gutenberg. Chunked at 1000 characters with 200 of
+overlap, retrieving the top 5.
 
 ## Running it
 
@@ -77,8 +76,7 @@ pip install -r requirements.txt
 echo "GROQ_API_KEY=your_key_here" > .env      # free key: https://console.groq.com
 ```
 
-**Streamlit UI** — builds the vector store from `sources/` on first run, which takes a
-minute:
+**Chat UI** — builds the vector store from `sources/` on first run, which takes a minute:
 
 ```bash
 streamlit run streamlit_app.py
@@ -93,55 +91,43 @@ python RAG_Agent.py
 **API:**
 
 ```bash
-uvicorn api:app --reload --port 8000
+uvicorn api:app --port 8000
 ```
 
-To point the UI at the API instead of running retrieval in-process, set `API_URL`:
+| Method | Path | |
+|---|---|---|
+| `GET` | `/health` | Reports chunk count and loaded sources, so a process that started without its data is obvious immediately |
+| `GET` | `/sources` | Available sources |
+| `POST` | `/chat` | `{question, source?, history?}` → `{answer, source_used, tool_called}` |
+
+Set `API_URL` to route the UI through the API instead of retrieving in-process:
 
 ```bash
 API_URL=http://localhost:8000 streamlit run streamlit_app.py
 ```
 
-### Endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/health` | Liveness — also reports chunk count and loaded sources |
-| `GET` | `/sources` | Available sources |
-| `POST` | `/chat` | `{question, source?, history?}` → `{answer, source_used, tool_called}` |
-
-`/health` reports the chunk count deliberately: a container that booted without its data
-returns `"status": "empty"` rather than failing later on a user's question.
-
 ## Deploying
 
-Runs on Streamlit Community Cloud from this repo — set `GROQ_API_KEY` in the app's
-**Secrets** as a root-level TOML key, which Streamlit also exposes as an environment
-variable. The UI runs retrieval in-process when `API_URL` is unset, so no separate API
-process is needed.
-
-Free HuggingFace Spaces no longer runs CPU compute Spaces on personal accounts, so that
-route needs a paid plan.
+Runs on Streamlit Community Cloud from this repo. Add `GROQ_API_KEY` as a root-level key
+in the app's **Secrets** — Streamlit exposes those as environment variables. With
+`API_URL` unset the UI retrieves in-process, so no second process is needed.
 
 ## Known limitations
 
 - **Broad questions retrieve poorly.** "Summarise this book" retrieves 5 semi-arbitrary
-  chunks, so the answer reflects those chunks, not the book. Needs hierarchical or
-  map-reduce summarisation.
-- **No reranking.** Retrieving 20 and reranking to the best 5 with a cross-encoder would
+  chunks, so the answer reflects those chunks rather than the book. Needs map-reduce
+  summarisation.
+- **No reranking.** Retrieving 20 and cutting to the best 5 with a cross-encoder would
   measurably improve precision.
 - **Pure semantic search.** Hybrid BM25 + vector would catch exact terms and rare proper
   nouns that embeddings blur.
-- **Citation consistency varies.** The 20B model usually names the source file but
-  sometimes says "Document 3". A larger model (`gpt-oss-120b`, also free on Groq)
-  follows the instruction more reliably.
+- **Citations vary.** The 20B model usually names the source file but sometimes says
+  "Document 3". `gpt-oss-120b`, also free on Groq, follows the instruction more reliably.
 - **No evaluation set.** Quality is judged by inspection, so there's no way to know
   whether a change helped.
-- **Collection is still named `attention_paper`** — a leftover from this project's
-  earlier life as a research-paper Q&A bot.
 
 ## Next steps
 
 1. Evaluation set — everything else is guesswork without it
 2. Cross-encoder reranking
-3. Web or arXiv search tools, so it can find sources rather than only read given ones
+3. Web search as a second tool, so it can find sources rather than only read given ones
