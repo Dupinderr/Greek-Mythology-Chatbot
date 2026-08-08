@@ -1,9 +1,12 @@
 """
-Streamlit chat UI. A thin client over the FastAPI service — it holds the
-conversation and the selected source, and does no retrieval itself.
+Streamlit chat UI. Holds the conversation and the selected source.
 
-Run locally (with the API already running on :8000):
-    streamlit run streamlit_app.py
+Runs two ways. With API_URL set it is a thin client over the FastAPI service.
+Without it, it calls rag_core in-process — which is how single-process hosts
+like Streamlit Cloud run it.
+
+    streamlit run streamlit_app.py                    # in-process
+    API_URL=http://localhost:8000 streamlit run ...   # against the API
 """
 
 import base64
@@ -21,6 +24,18 @@ DIRECT_MODE = not API_URL
 TIMEOUT = 120
 
 if DIRECT_MODE:
+
+    # Streamlit Cloud exposes root-level secrets as environment variables, but
+    # only once st.secrets has been read — and rag_core builds its Groq client
+    # at import time. So read them here first, before that import.
+    try:
+        for key in ("GROQ_API_KEY", "GROQ_MODEL"):
+            if key in st.secrets:
+                os.environ.setdefault(key, str(st.secrets[key]))
+    except Exception:
+        # No secrets.toml when running locally; .env covers it there.
+        pass
+
     import rag_core
 
 BACKGROUND = Path(__file__).parent / "assets" / "background.jpg"
