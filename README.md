@@ -123,23 +123,6 @@ process is needed.
 Free HuggingFace Spaces no longer runs CPU compute Spaces on personal accounts, so that
 route needs a paid plan.
 
-## Docker
-
-> **Written but never built.** The Dockerfile is statically checked only — the
-> development machine didn't have the ~15 GB of free disk a PyTorch image needs. Expect
-> to iterate on the first real build.
-
-The vector store is baked in at build time, so the container boots ready to answer.
-
-```bash
-docker build -t mythology-rag .
-docker run -p 7860:7860 -e GROQ_API_KEY=your_key_here mythology-rag
-```
-
-The key is injected at runtime, never baked into the image. Expect ~1.5–2 GB, dominated
-by PyTorch; the Dockerfile takes the CPU-only wheel to avoid ~2 GB of unused CUDA
-libraries.
-
 ## Known limitations
 
 - **Broad questions retrieve poorly.** "Summarise this book" retrieves 5 semi-arbitrary

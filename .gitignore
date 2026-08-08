@@ -11,12 +11,12 @@ __pycache__/
 # Rebuilt on first run from sources/, so not worth committing (~32MB)
 chroma_db/
 
-# HuggingFace rejects non-LFS binaries, so the background ships as the
-# .b64 text file beside it. Keep the original local only.
+# The background ships as the .b64 text file beside it, since some hosts reject
+# binaries that aren't in LFS. Keep the original local only.
 assets/*.jpg
 assets/*.png
 
-# The research PDF from the project's earlier life
+# Unrelated to this project — left over from its earlier life as a paper Q&A bot
 attention.pdf
 
 .DS_Store

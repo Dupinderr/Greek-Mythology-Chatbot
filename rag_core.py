@@ -42,7 +42,7 @@ MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 PERSIST_DIRECTORY = os.getenv("CHROMA_DIR", "./chroma_db")
-COLLECTION_NAME = "attention_paper"
+COLLECTION_NAME = "mythology"
 
 MAX_SOURCES = 5
 TOP_K = 5
@@ -151,19 +151,6 @@ def add_source(path):
     vectorstore.add_documents(chunks)
 
     return True, f"Added '{name}' — {len(chunks)} chunks."
-
-
-def remove_source(name):
-    """
-    Drop every chunk belonging to one source. Returns (ok, message).
-    """
-
-    if name not in list_sources():
-        return False, f"'{name}' is not a known source."
-
-    vectorstore._collection.delete(where={"source": name})
-
-    return True, f"Removed '{name}'."
 
 
 # ----------------------------------------------------------------------------

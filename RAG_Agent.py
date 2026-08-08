@@ -5,7 +5,6 @@ All retrieval and agent logic lives in rag_core, which the API and Streamlit
 UI share, so behaviour stays identical across the three front-ends.
 """
 
-import rag_core
 from rag_core import MAX_SOURCES, add_source, ask, list_sources
 
 # None means "search across every source".
